@@ -1,0 +1,52 @@
+[package]
+name = "bevy_parallaxium"
+version = "0.1.0"
+authors = [
+    "glklimmer <https://github.com/glklimmer>",
+    "Gianluca Frongia <gianluca.frongia@protonmail.com>",
+]
+edition = "2024"
+description = "A Bevy plugin for creating a parallax effect."
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/Gialale-Games/bevy_parallaxium"
+categories = ["game-development", "games"]
+keywords = ["bevy", "gamedev", "parallax", "scrolling", "background"]
+exclude = ["assets/*"]
+
+[dependencies]
+serde = { version = "1.0.228", optional = true }
+bevy-inspector-egui = { version = "0.35", optional = true }
+
+[dependencies.bevy]
+version = "0.17.3"
+default-features = false
+features = [
+    "std",
+    "bevy_render",
+    "bevy_sprite_render",
+    "bevy_text",
+    "bevy_core_pipeline",
+    "bevy_sprite",
+    "bevy_image",
+    "bevy_asset",
+    "bevy_window",
+    "async_executor",
+    "bevy_camera"
+]
+
+[dev-dependencies]
+bevy-inspector-egui = "0.35"
+ron = "0.12.0"
+
+[dev-dependencies.bevy]
+version = "0.17.3"
+default-features = false
+features = ["x11", "png"]
+
+[package.metadata.docs.rs]
+features = ["bevy/x11"]
+
+
+[features]
+bevy-inspector-egui = ["dep:bevy-inspector-egui"]
