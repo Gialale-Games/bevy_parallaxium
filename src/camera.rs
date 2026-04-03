@@ -1,9 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{ecs::entity::EntityRow, prelude::*};
-#[cfg(feature = "bevy-inspector-egui")]
-use bevy_inspector_egui::prelude::*;
-
+use bevy::prelude::*;
 use crate::{Limit, ParallaxMoveEvent};
 
 #[derive(Clone, Copy)]
@@ -69,8 +66,6 @@ impl PID {
 }
 
 #[derive(Default)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
-#[cfg_attr(feature = "bevy-inspector-egui", reflect(InspectorOptions))]
 pub enum RotationStrategy {
     #[default]
     None,
@@ -134,8 +129,6 @@ impl RotationStrategy {
 }
 
 #[derive(Default, Clone)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
-#[cfg_attr(feature = "bevy-inspector-egui", reflect(InspectorOptions))]
 pub enum LinearAxisStrategy {
     None,
     #[default]
@@ -187,8 +180,6 @@ impl LinearAxisStrategy {
     }
 }
 
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
-#[cfg_attr(feature = "bevy-inspector-egui", reflect(InspectorOptions))]
 pub struct TranslationStrategy {
     pub x: LinearAxisStrategy,
     pub y: LinearAxisStrategy,
@@ -208,10 +199,9 @@ impl TranslationStrategy {
 }
 
 #[derive(Component)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
-#[cfg_attr(feature = "bevy-inspector-egui", reflect(InspectorOptions))]
 pub struct CameraFollow {
-    pub target: Entity,
+    /// The entity to follow. `None` disables following.
+    pub target: Option<Entity>,
     pub translation_strategy: TranslationStrategy,
     pub rotation_strategy: RotationStrategy,
     pub offset: Vec2,
@@ -220,7 +210,7 @@ pub struct CameraFollow {
 impl Default for CameraFollow {
     fn default() -> Self {
         Self {
-            target: Entity::from_row(EntityRow::from_raw_u32(0).unwrap()),
+            target: None,
             translation_strategy: TranslationStrategy::new(LinearAxisStrategy::Fixed, LinearAxisStrategy::Fixed),
             rotation_strategy: RotationStrategy::None,
             offset: Vec2::ZERO,
@@ -231,7 +221,7 @@ impl Default for CameraFollow {
 impl CameraFollow {
     pub fn new(entity: Entity) -> Self {
         Self {
-            target: entity,
+            target: Some(entity),
             ..default()
         }
     }
@@ -253,7 +243,7 @@ impl CameraFollow {
 
     pub fn fixed(entity: Entity) -> Self {
         Self {
-            target: entity,
+            target: Some(entity),
             translation_strategy: TranslationStrategy::new(LinearAxisStrategy::Fixed, LinearAxisStrategy::Fixed),
             rotation_strategy: RotationStrategy::Fixed,
             ..default()
@@ -263,7 +253,7 @@ impl CameraFollow {
     pub fn proportional(entity: Entity, value: f32) -> Self {
         let axis_strategy = LinearAxisStrategy::P(value);
         Self {
-            target: entity,
+            target: Some(entity),
             translation_strategy: TranslationStrategy::new(axis_strategy.clone(), axis_strategy),
             rotation_strategy: RotationStrategy::P(value),
             ..default()
@@ -273,7 +263,7 @@ impl CameraFollow {
     pub fn pid(entity: Entity, pid: &PID) -> Self {
         let axis_strategy = pid.create_linear();
         Self {
-            target: entity,
+            target: Some(entity),
             translation_strategy: TranslationStrategy::new(axis_strategy.clone(), axis_strategy),
             rotation_strategy: pid.create_radial(),
             ..default()
@@ -282,7 +272,7 @@ impl CameraFollow {
 
     pub fn pid_xyz(entity: Entity, x: &PID, y: &PID, z: &PID) -> Self {
         Self {
-            target: entity,
+            target: Some(entity),
             translation_strategy: TranslationStrategy::new(x.create_linear(), y.create_linear()),
             rotation_strategy: z.create_radial(),
             ..default()
@@ -291,7 +281,7 @@ impl CameraFollow {
 
     pub fn fixed_translation(entity: Entity) -> Self {
         Self {
-            target: entity,
+            target: Some(entity),
             translation_strategy: TranslationStrategy::new(LinearAxisStrategy::Fixed, LinearAxisStrategy::Fixed),
             rotation_strategy: RotationStrategy::None,
             ..default()
@@ -301,7 +291,7 @@ impl CameraFollow {
     pub fn proportional_translation(entity: Entity, value: f32) -> Self {
         let axis_strategy = LinearAxisStrategy::P(value);
         Self {
-            target: entity,
+            target: Some(entity),
             translation_strategy: TranslationStrategy::new(axis_strategy.clone(), axis_strategy),
             rotation_strategy: RotationStrategy::None,
             ..default()
@@ -311,7 +301,7 @@ impl CameraFollow {
     pub fn pid_translation(entity: Entity, pid: PID) -> Self {
         let axis_strategy = pid.create_linear();
         Self {
-            target: entity,
+            target: Some(entity),
             translation_strategy: TranslationStrategy::new(axis_strategy.clone(), axis_strategy),
             rotation_strategy: RotationStrategy::None,
             ..default()
@@ -326,7 +316,10 @@ pub fn camera_follow_system(
     mut event_writer: MessageWriter<ParallaxMoveEvent>,
 ) -> Result {
     for (camera, camera_transform, mut follow) in query.iter_mut() {
-        if let Ok(target_transform) = transform_query.get(follow.target) {
+        let Some(target_entity) = follow.target else {
+            continue;
+        };
+        if let Ok(target_transform) = transform_query.get(target_entity) {
             let seconds = time.delta_secs();
             let target = target_transform.mul_transform(Transform::from_translation(follow.offset.extend(0.)));
             let camera_movement =
@@ -338,11 +331,7 @@ pub fn camera_follow_system(
                 target.rotation.to_euler(EulerRot::XYZ).2,
                 camera_transform.rotation.to_euler(EulerRot::XYZ).2,
             );
-            event_writer.write(ParallaxMoveEvent {
-                translation: camera_movement,
-                camera,
-                rotation: camera_rotation,
-            });
+            event_writer.write(ParallaxMoveEvent::new(camera, camera_movement, camera_rotation));
         }
     }
     Ok(())

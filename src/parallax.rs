@@ -1,8 +1,5 @@
 use bevy::prelude::*;
 
-#[cfg(feature = "bevy-inspector-egui")]
-use bevy_inspector_egui::prelude::*;
-
 /// Event used to update parallax
 #[derive(Message, Debug)]
 pub struct ParallaxMoveEvent {
@@ -16,6 +13,18 @@ pub struct ParallaxMoveEvent {
 }
 
 impl ParallaxMoveEvent {
+    pub fn new(camera: Entity, translation: Vec2, rotation: f32) -> Self {
+        Self { camera, translation, rotation }
+    }
+
+    pub fn translate(camera: Entity, translation: Vec2) -> Self {
+        Self { camera, translation, rotation: 0.0 }
+    }
+
+    pub fn rotate(camera: Entity, rotation: f32) -> Self {
+        Self { camera, translation: Vec2::ZERO, rotation }
+    }
+
     pub fn has_translation(&self) -> bool {
         self.translation != Vec2::ZERO
     }
@@ -39,23 +48,12 @@ impl ParallaxMoveEvent {
 
 /// Attach to a camera to enable parallax scrolling on its child `ParallaxLayer` entities.
 #[derive(Component)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
 pub struct ParallaxCamera {
     pub render_layer: u8,
     pub limits: Vec2Limit,
 }
 
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
-#[cfg_attr(feature = "bevy-inspector-egui", reflect(InspectorOptions))]
-pub struct ParallaxLayerLimit {
-    pub min: f32,
-    pub max: f32,
-}
-
-#[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
-#[cfg_attr(feature = "bevy-inspector-egui", reflect(InspectorOptions))]
 pub struct Limit {
     pub min: f32,
     pub max: f32,
@@ -87,13 +85,11 @@ impl Limit {
     }
 
     pub fn fix(&self, value: f32) -> f32 {
-        f32::min(f32::max(value, self.min), self.max)
+        value.clamp(self.min, self.max)
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
-#[cfg_attr(feature = "bevy-inspector-egui", reflect(InspectorOptions))]
 pub struct Vec2Limit {
     pub x: Limit,
     pub y: Limit,
@@ -142,11 +138,6 @@ mod tests {
     use bevy::{ecs::entity::EntityRow, prelude::*};
 
     use crate::ParallaxMoveEvent;
-
-    #[test]
-    fn test_check() {
-        assert_eq!(true, true);
-    }
 
     #[test]
     fn test_parallax_event() {

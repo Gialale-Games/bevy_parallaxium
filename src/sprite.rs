@@ -10,19 +10,24 @@ pub struct SpriteFrameUpdate {
 }
 
 impl SpriteFrameUpdate {
+    /// Advance the animation by `duration` and return the new atlas index.
+    /// Only increments the frame when the timer fires.
     pub fn next_index(&mut self, duration: Duration) -> usize {
-        self.timer.tick(duration);
-        if self.timer.just_finished() {
-            self.index += 1;
+        if self.timer.tick(duration).just_finished() {
+            self.index = (self.index + 1) % self.total;
         }
-        self.index % self.total
+        self.index
     }
 }
 
 pub fn sprite_frame_update_system(time: Res<Time>, mut query: Query<(&mut Sprite, &mut SpriteFrameUpdate)>) -> Result {
+    let delta = time.delta();
     for (mut sprite, mut frame) in query.iter_mut() {
-        if let Some(atlas) = &mut sprite.texture_atlas {
-            atlas.index = frame.next_index(time.delta());
+        if frame.timer.tick(delta).just_finished() {
+            frame.index = (frame.index + 1) % frame.total;
+            if let Some(atlas) = &mut sprite.texture_atlas {
+                atlas.index = frame.index;
+            }
         }
     }
     Ok(())

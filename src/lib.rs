@@ -5,41 +5,29 @@ use bevy::window::PrimaryWindow;
 pub mod camera;
 pub mod layer;
 pub mod parallax;
+#[cfg(feature = "animation")]
 pub mod sprite;
 
 pub use camera::*;
 pub use layer::*;
 pub use parallax::*;
+#[cfg(feature = "animation")]
 pub use sprite::*;
 
 pub struct ParallaxPlugin;
 
-impl ParallaxPlugin {
-    #[cfg(feature = "bevy-inspector-egui")]
-    fn add_features(&self, app: &mut App) {
-        app.register_type::<Limit>()
-            .register_type::<CameraFollow>()
-            .register_type::<ParallaxLayer>()
-            .register_type::<LayerTexture>()
-            .register_type::<ParallaxCamera>();
-    }
-
-    #[cfg(not(feature = "bevy-inspector-egui"))]
-    fn add_features(&self, _app: &mut App) {}
-}
-
 impl Plugin for ParallaxPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<ParallaxMoveEvent>()
-            .add_systems(PreUpdate, initialize_layers_system)
-            .add_systems(Update, sprite_frame_update_system)
-            .add_systems(
+            .add_systems(PreUpdate, initialize_layers_system);
+        #[cfg(feature = "animation")]
+        app.add_systems(Update, sprite_frame_update_system);
+        app.add_systems(
                 Update,
                 (camera_follow_system, move_layers_system, update_layer_textures_system)
                     .chain()
                     .in_set(ParallaxSystems),
             );
-        self.add_features(app);
     }
 }
 
@@ -49,12 +37,12 @@ pub struct ParallaxSystems;
 /// Initialize newly added `ParallaxLayer` components by spawning their texture grids.
 /// Layers must be children of a camera entity with `ParallaxCamera`.
 fn initialize_layers_system(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlasLayout>>,
     primary_window: Single<&Window, With<PrimaryWindow>>,
     mut layer_query: Query<(Entity, &mut ParallaxLayer, &ChildOf), Added<ParallaxLayer>>,
     camera_query: Query<(&ParallaxCamera, &Camera)>,
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
 ) -> Result {
     let mut window_size = Vec2::new(primary_window.width(), primary_window.height());
 
@@ -100,7 +88,6 @@ fn initialize_layers_system(
 
         // Set runtime fields on the layer
         layer.texture_count = texture_count;
-        layer.initialized = true;
 
         // Set the layer's own transform and render layer
         commands
@@ -117,20 +104,24 @@ fn initialize_layers_system(
             .with_children(|parent| {
                 for x in x_range {
                     for y in y_range.clone() {
-                        let repeat_strategy = layer.repeat.get_strategy();
                         let mut adjusted_sprite = sprite_bundle.clone();
-                        repeat_strategy.transform(&mut adjusted_sprite, (x, y));
+                        layer.repeat.get_strategy().transform(&mut adjusted_sprite, (x, y));
 
                         let mut transform = Transform::default();
                         transform.translation.x = layer.tile_size.x as f32 * x as f32;
                         transform.translation.y = layer.tile_size.y as f32 * y as f32;
                         let mut child_commands = parent.spawn((adjusted_sprite, transform));
+                        let tile_w = layer.tile_size.x as f32;
+                        let tile_h = layer.tile_size.y as f32;
                         child_commands
                             .insert(RenderLayers::from_layers(&[render_layer.into()]))
                             .insert(LayerTexture {
-                                width: layer.tile_size.x as f32,
-                                height: layer.tile_size.y as f32,
+                                width: tile_w,
+                                height: tile_h,
+                                half_width: tile_w * layer.scale.x / 2.0,
+                                half_height: tile_h * layer.scale.y / 2.0,
                             });
+                        #[cfg(feature = "animation")]
                         if let Some(animation_bundle) = layer.create_animation_bundle() {
                             child_commands.insert(animation_bundle);
                         }
@@ -171,24 +162,26 @@ fn move_layers_system(
     Ok(())
 }
 
+type LayerQuery<'w, 's> = Query<'w, 's, (&'static ParallaxLayer, &'static Children, &'static GlobalTransform), Without<ParallaxCamera>>;
+type TextureQuery<'w, 's> = Query<'w, 's, (&'static GlobalTransform, &'static mut Transform, &'static LayerTexture, &'static ViewVisibility), (Without<ParallaxCamera>, Without<ParallaxLayer>)>;
+
 /// Update layer texture positions for infinite scrolling.
 /// Traverses camera → layer → texture hierarchy via Children.
 fn update_layer_textures_system(
     camera_query: Query<(Entity, &Transform, &Camera, &Children), With<ParallaxCamera>>,
-    layer_query: Query<(&ParallaxLayer, &Children, &GlobalTransform), Without<ParallaxCamera>>,
-    mut texture_query: Query<
-        (&GlobalTransform, &mut Transform, &LayerTexture, &ViewVisibility),
-        (Without<ParallaxCamera>, Without<ParallaxLayer>),
-    >,
+    layer_query: LayerQuery,
+    mut texture_query: TextureQuery,
     window_query: Query<&Window, With<PrimaryWindow>>,
     mut move_events: MessageReader<ParallaxMoveEvent>,
 ) -> Result {
+    // Compute once per frame — valid for all events this tick.
+    let primary_window = window_query.single()?;
+    let window_size = Vec2::new(primary_window.width(), primary_window.height());
+
     for event in move_events.read() {
         if !event.has_translation() {
             continue;
         }
-        let primary_window = window_query.single()?;
-        let window_size = Vec2::new(primary_window.width(), primary_window.height());
 
         if let Ok((_camera_entity, camera_transform, camera, camera_children)) = camera_query.get(event.camera) {
             let view_size = match &camera.viewport {
@@ -213,18 +206,17 @@ fn update_layer_textures_system(
                         continue;
                     }
 
-                    let texture_gtransform_computed = texture_gtransform.compute_transform();
-
                     // Correct for stale GlobalTransform: compute the texture's position
-                    // relative to the camera in world space
-                    let stale_texture_translation = camera_transform.translation - texture_gtransform_computed.translation;
+                    // relative to the camera in world space. GlobalTransform::translation()
+                    // is cheaper than compute_transform() as it avoids full matrix decomposition.
+                    let stale_texture_translation = camera_transform.translation - texture_gtransform.translation();
                     // The layer counteracts (1-speed) of camera movement, so effective movement is speed
                     let correction = Vec3::new(event.translation.x * layer.speed.x, event.translation.y * layer.speed.y, 0.0);
                     let texture_translation = stale_texture_translation - correction;
 
                     if layer.repeat.has_horizontal() {
                         let x_delta = layer_texture.width * layer.texture_count.x;
-                        let half_width = layer_texture.width * texture_gtransform_computed.scale.x / 2.0;
+                        let half_width = layer_texture.half_width;
                         if texture_translation.x + half_width < -view_size.x {
                             let distance_offscreen = -view_size.x - (texture_translation.x + half_width);
                             let num_of_jumps = (distance_offscreen / x_delta).ceil().max(1.0);
@@ -237,7 +229,7 @@ fn update_layer_textures_system(
                     }
                     if layer.repeat.has_vertical() {
                         let y_delta = layer_texture.height * layer.texture_count.y;
-                        let half_height = layer_texture.height * texture_gtransform_computed.scale.y / 2.0;
+                        let half_height = layer_texture.half_height;
                         if texture_translation.y + half_height < -view_size.y {
                             let distance_offscreen = -view_size.y - (texture_translation.y + half_height);
                             let num_of_jumps = (distance_offscreen / y_delta).ceil().max(1.0);

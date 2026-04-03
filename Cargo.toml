@@ -16,7 +16,6 @@ exclude = ["assets/*"]
 
 [dependencies]
 serde = { version = "1.0.228", optional = true }
-bevy-inspector-egui = { version = "0.35", optional = true }
 
 [dependencies.bevy]
 version = "0.17.3"
@@ -36,17 +35,16 @@ features = [
 ]
 
 [dev-dependencies]
-bevy-inspector-egui = "0.35"
 ron = "0.12.0"
 
 [dev-dependencies.bevy]
 version = "0.17.3"
 default-features = false
-features = ["x11", "png"]
+features = ["bevy_log", "x11", "png"]
 
 [package.metadata.docs.rs]
 features = ["bevy/x11"]
 
-
 [features]
-bevy-inspector-egui = ["dep:bevy-inspector-egui"]
+default = ["animation"]
+animation = []

@@ -1,24 +1,30 @@
+#[cfg(feature = "animation")]
 use std::time::Duration;
 
 use bevy::prelude::*;
 
+#[cfg(feature = "animation")]
 use crate::SpriteFrameUpdate;
-#[cfg(feature = "bevy-inspector-egui")]
-use bevy_inspector_egui::prelude::*;
 
+/// Controls how repeated tiles are flipped when tiling a layer.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
 pub enum RepeatStrategy {
+    /// No tiling — the sprite is rendered exactly once with no repetition.
+    None,
+    /// All tiles use the same orientation.
     Same,
+    /// Every other column is flipped horizontally.
     MirrorHorizontally,
+    /// Every other row is flipped vertically.
     MirrorVertically,
+    /// Every other tile is flipped both horizontally and vertically.
     MirrorBoth,
 }
 
 impl RepeatStrategy {
     pub fn transform(&self, sprite: &mut Sprite, pos: (i32, i32)) {
         match self {
-            Self::Same => (),
+            Self::None | Self::Same => (),
             Self::MirrorHorizontally => {
                 let (x, _) = pos;
                 sprite.flip_x ^= x % 2 != 0;
@@ -36,49 +42,66 @@ impl RepeatStrategy {
     }
 }
 
+/// Defines the axes along which a parallax layer tiles.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
-#[cfg_attr(feature = "bevy-inspector-egui", reflect(InspectorOptions))]
 pub enum LayerRepeat {
+    /// No tiling — the sprite is rendered exactly once.
+    None,
+    /// Tiles only along the X axis.
     Horizontal(RepeatStrategy),
+    /// Tiles only along the Y axis.
     Vertical(RepeatStrategy),
+    /// Tiles along both axes.
     Bidirectional(RepeatStrategy),
 }
 
 impl LayerRepeat {
+    /// No tiling.
+    pub fn none() -> Self {
+        Self::None
+    }
+
+    /// Tile in both directions using the given strategy.
     pub fn both(strategy: RepeatStrategy) -> Self {
         Self::Bidirectional(strategy)
     }
 
+    /// Tile horizontally using the given strategy.
     pub fn horizontally(strategy: RepeatStrategy) -> Self {
         Self::Horizontal(strategy)
     }
 
+    /// Tile vertically using the given strategy.
     pub fn vertically(strategy: RepeatStrategy) -> Self {
         Self::Vertical(strategy)
     }
 
+    /// Tile horizontally with no mirroring.
     pub fn horizontal() -> Self {
         Self::Horizontal(RepeatStrategy::Same)
     }
 
+    /// Tile vertically with no mirroring.
     pub fn vertical() -> Self {
         Self::Vertical(RepeatStrategy::Same)
     }
 
+    /// Returns `true` if this repeat mode tiles along the Y axis.
     pub fn has_vertical(&self) -> bool {
         matches!(self, Self::Vertical(_) | Self::Bidirectional(_))
     }
 
+    /// Returns `true` if this repeat mode tiles along the X axis.
     pub fn has_horizontal(&self) -> bool {
         matches!(self, Self::Horizontal(_) | Self::Bidirectional(_))
     }
 
-    pub fn get_strategy(&self) -> RepeatStrategy {
+    /// Returns the [`RepeatStrategy`] associated with this repeat mode.
+    /// Returns [`RepeatStrategy::None`] when the layer does not tile.
+    pub fn get_strategy(&self) -> &RepeatStrategy {
         match self {
-            Self::Horizontal(strategy) => strategy.clone(),
-            Self::Bidirectional(strategy) => strategy.clone(),
-            Self::Vertical(strategy) => strategy.clone(),
+            Self::None => &RepeatStrategy::None,
+            Self::Horizontal(strategy) | Self::Bidirectional(strategy) | Self::Vertical(strategy) => strategy,
         }
     }
 }
@@ -89,15 +112,22 @@ impl Default for LayerRepeat {
     }
 }
 
+/// Specifies the playback speed of a sprite-sheet animation.
+#[cfg(feature = "animation")]
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
 pub enum Animation {
+    /// Frames per second (e.g. `Animation::FPS(12.0)`).
     FPS(f32),
+    /// Fixed duration per frame.
     FrameDuration(Duration),
+    /// Total duration for one full loop across all frames.
     TotalDuration(Duration),
 }
 
+#[cfg(feature = "animation")]
 impl Animation {
+    /// Converts this animation spec into a [`SpriteFrameUpdate`] for the given grid dimensions
+    /// and starting frame index.
     pub fn to_sprite_update(&self, cols: usize, rows: usize, index: usize) -> SpriteFrameUpdate {
         let total = cols * rows;
         let duration = match self {
@@ -115,7 +145,6 @@ impl Animation {
 
 /// Core component for a parallax layer. Spawn as a child of a camera with `ParallaxCamera`.
 #[derive(Component)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
 pub struct ParallaxLayer {
     /// Path to the texture asset
     pub path: String,
@@ -143,16 +172,17 @@ pub struct ParallaxLayer {
     /// Flip (horizontal, vertical)
     pub flip: (bool, bool),
     /// Optional animation
+    #[cfg(feature = "animation")]
     pub animation: Option<Animation>,
-    /// Whether this layer has been initialized (textures spawned)
-    pub(crate) initialized: bool,
     /// Number of texture tiles in each direction
     pub(crate) texture_count: Vec2,
 }
 
 impl ParallaxLayer {
-    /// Create a new parallax layer with the given texture path and speed.
-    /// Speed is a scalar applied uniformly: 0.0 = moves with camera, 1.0 = stationary in world.
+    /// Creates a new parallax layer with the given texture path and uniform speed.
+    ///
+    /// `speed` is applied to both axes: `0.0` means the layer scrolls with the camera
+    /// (appears fixed on screen), `1.0` means the layer is fixed in world space.
     pub fn new(path: impl Into<String>, speed: f32) -> Self {
         Self {
             path: path.into(),
@@ -161,70 +191,85 @@ impl ParallaxLayer {
         }
     }
 
+    /// Sets the size of a single tile within the texture atlas.
     pub fn with_tile_size(mut self, tile_size: UVec2) -> Self {
         self.tile_size = tile_size;
         self
     }
 
+    /// Sets the tiling/repeat behavior for this layer.
     pub fn with_repeat(mut self, repeat: LayerRepeat) -> Self {
         self.repeat = repeat;
         self
     }
 
+    /// Sets the world-space scale of each tile.
     pub fn with_scale(mut self, scale: Vec2) -> Self {
         self.scale = scale;
         self
     }
 
+    /// Sets the Z depth of this layer.
     pub fn with_z(mut self, z: f32) -> Self {
         self.z = z;
         self
     }
 
+    /// Sets the initial world-space position offset of this layer.
     pub fn with_position(mut self, position: Vec2) -> Self {
         self.position = position;
         self
     }
 
+    /// Sets independent parallax speed factors for X and Y.
     pub fn with_speed_2d(mut self, speed: Vec2) -> Self {
         self.speed = speed;
         self
     }
 
+    /// Sets the tint color applied to all tiles on this layer.
     pub fn with_color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }
 
+    /// Sets the initial horizontal and vertical flip state of tiles.
     pub fn with_flip(mut self, flip_x: bool, flip_y: bool) -> Self {
         self.flip = (flip_x, flip_y);
         self
     }
 
+    /// Sets the number of columns in the texture atlas.
     pub fn with_cols(mut self, cols: usize) -> Self {
         self.cols = cols;
         self
     }
 
+    /// Sets the number of rows in the texture atlas.
     pub fn with_rows(mut self, rows: usize) -> Self {
         self.rows = rows;
         self
     }
 
+    /// Sets the starting sprite-atlas frame index.
     pub fn with_index(mut self, index: usize) -> Self {
         self.index = index;
         self
     }
 
+    /// Attaches a sprite-sheet animation to this layer.
+    #[cfg(feature = "animation")]
     pub fn with_animation(mut self, animation: Animation) -> Self {
         self.animation = Some(animation);
         self
     }
 
+    /// Builds a [`TextureAtlasLayout`] from this layer's tile size, columns, and rows.
     pub fn create_texture_atlas_layout(&self) -> TextureAtlasLayout {
         TextureAtlasLayout::from_grid(self.tile_size, self.cols as u32, self.rows as u32, None, None)
     }
 
+    /// Creates a [`Sprite`] from this layer's color, flip, and atlas settings.
     pub fn create_sprite(&self, image: Handle<Image>, atlas: TextureAtlas) -> Sprite {
         Sprite {
             image,
@@ -236,6 +281,8 @@ impl ParallaxLayer {
         }
     }
 
+    /// Returns a bundle that drives sprite-sheet animation, or `None` if no animation is set.
+    #[cfg(feature = "animation")]
     pub fn create_animation_bundle(&self) -> Option<impl Bundle> {
         self.animation
             .as_ref()
@@ -258,8 +305,8 @@ impl Default for ParallaxLayer {
             color: Color::WHITE,
             index: 0,
             flip: (false, false),
+            #[cfg(feature = "animation")]
             animation: None,
-            initialized: false,
             texture_count: Vec2::ONE,
         }
     }
@@ -267,10 +314,13 @@ impl Default for ParallaxLayer {
 
 /// Core component for layer texture
 #[derive(Component)]
-#[cfg_attr(feature = "bevy-inspector-egui", derive(Reflect, InspectorOptions))]
 pub struct LayerTexture {
-    /// Width of the texture
+    /// Width of a single tile in local (unscaled) space
     pub width: f32,
-    /// Height of the texture
+    /// Height of a single tile in local (unscaled) space
     pub height: f32,
+    /// Half-width of a tile in world space (precomputed: width * layer.scale.x / 2)
+    pub half_width: f32,
+    /// Half-height of a tile in world space (precomputed: height * layer.scale.y / 2)
+    pub half_height: f32,
 }
