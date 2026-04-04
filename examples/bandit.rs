@@ -142,7 +142,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut layouts: Re
             ParallaxLayer::new("ground.png", 0.0)
                 .with_tile_size(UVec2::new(640, 360))
                 .with_repeat(LayerRepeat::horizontal())
-                .with_position(Vec2::new(0., 30.))
+                .with_position(Vec2::new(0., 35.))
                 .with_z(-1.0),
         ],
     ));
