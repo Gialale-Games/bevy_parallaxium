@@ -767,7 +767,7 @@ checksum = "7ef8e4b7e61dfe7719bb03c884dc270cd46a82efb40f93e9933b990c5c190c59"
 
 [[package]]
 name = "bevy_parallaxium"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bevy",
  "ron 0.12.1",

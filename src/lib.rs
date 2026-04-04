@@ -23,11 +23,11 @@ impl Plugin for ParallaxPlugin {
         #[cfg(feature = "animation")]
         app.add_systems(Update, sprite_frame_update_system);
         app.add_systems(
-                Update,
-                (camera_follow_system, move_layers_system, update_layer_textures_system)
-                    .chain()
-                    .in_set(ParallaxSystems),
-            );
+            Update,
+            (camera_follow_system, move_layers_system, update_layer_textures_system)
+                .chain()
+                .in_set(ParallaxSystems),
+        );
     }
 }
 
@@ -37,18 +37,19 @@ pub struct ParallaxSystems;
 /// Initialize newly added `ParallaxLayer` components by spawning their texture grids.
 /// Layers must be children of a camera entity with `ParallaxCamera`.
 fn initialize_layers_system(
-    mut texture_atlases: ResMut<Assets<TextureAtlasLayout>>,
-    primary_window: Single<&Window, With<PrimaryWindow>>,
     mut layer_query: Query<(Entity, &mut ParallaxLayer, &ChildOf), Added<ParallaxLayer>>,
-    camera_query: Query<(&ParallaxCamera, &Camera)>,
-    mut commands: Commands,
+    primary_window: Single<&Window, With<PrimaryWindow>>,
+    camera_query: Query<(&ParallaxCamera, &Camera, &Transform)>,
+    mut texture_atlases: ResMut<Assets<TextureAtlasLayout>>,
     asset_server: Res<AssetServer>,
+    mut commands: Commands,
 ) -> Result {
     let mut window_size = Vec2::new(primary_window.width(), primary_window.height());
 
     for (layer_entity, mut layer, child_of) in layer_query.iter_mut() {
         let camera_entity = child_of.parent();
-        let (parallax_camera, camera) = camera_query.get(camera_entity)?;
+        let (parallax_camera, camera, camera_transform) = camera_query.get(camera_entity)?;
+        let cam_pos = camera_transform.translation.truncate();
         if let Some(viewport) = &camera.viewport {
             window_size = viewport.physical_size.as_vec2();
         }
@@ -95,7 +96,11 @@ fn initialize_layers_system(
             .insert(RenderLayers::from_layers(&[render_layer.into()]))
             .insert((
                 Transform {
-                    translation: Vec3::new(layer.position.x, layer.position.y, layer.z),
+                    translation: Vec3::new(
+                        layer.position.x - cam_pos.x * (1.0 - layer.speed.x),
+                        layer.position.y - cam_pos.y * (1.0 - layer.speed.y),
+                        layer.z,
+                    ),
                     scale: layer.scale.extend(1.0),
                     ..default()
                 },
@@ -163,7 +168,17 @@ fn move_layers_system(
 }
 
 type LayerQuery<'w, 's> = Query<'w, 's, (&'static ParallaxLayer, &'static Children, &'static GlobalTransform), Without<ParallaxCamera>>;
-type TextureQuery<'w, 's> = Query<'w, 's, (&'static GlobalTransform, &'static mut Transform, &'static LayerTexture, &'static ViewVisibility), (Without<ParallaxCamera>, Without<ParallaxLayer>)>;
+type TextureQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static GlobalTransform,
+        &'static mut Transform,
+        &'static LayerTexture,
+        &'static ViewVisibility,
+    ),
+    (Without<ParallaxCamera>, Without<ParallaxLayer>),
+>;
 
 /// Update layer texture positions for infinite scrolling.
 /// Traverses camera → layer → texture hierarchy via Children.
