@@ -1,6 +1,6 @@
 [package]
 name = "bevy_parallaxium"
-version = "0.1.1"
+version = "0.2.0"
 authors = [
     "glklimmer <https://github.com/glklimmer>",
     "Gianluca Frongia <gianluca.frongia@protonmail.com>",
