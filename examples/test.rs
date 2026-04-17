@@ -7,7 +7,7 @@ const FRAME_DURATION: f32 = 0.1;
 
 const IDLE_ROW: usize = 0;
 const IDLE_FRAMES: usize = 4;
-const RUN_ROW: usize = 1;
+const RUN_ROW: usize = 3;
 const RUN_FRAMES: usize = 6;
 
 fn main() {
@@ -88,7 +88,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut layouts: Re
     let player = commands
         .spawn((
             Sprite {
-                image: asset_server.load("MiniBandit.png"),
+                image: asset_server.load("MiniKingMan.png"),
                 texture_atlas: Some(TextureAtlas { layout, index: 1 }),
                 ..default()
             },
