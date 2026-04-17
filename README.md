@@ -156,6 +156,32 @@ ParallaxCamera {
 }
 ```
 
+### Mirrored view
+
+Flip the camera horizontally — as if viewing the scene from behind — with `ViewDirection`. Parallax, tiling, and `CameraFollow` all continue to work unchanged.
+
+```rust,no_run
+use bevy_parallaxium::{ParallaxCamera, ViewDirection};
+
+// At spawn time:
+ParallaxCamera::default().with_view_direction(ViewDirection::Mirrored)
+```
+
+Toggle at runtime by mutating the component — the plugin syncs `Transform.scale.x` for you:
+
+```rust,no_run
+fn toggle_mirror(mut cameras: Query<&mut ParallaxCamera>) {
+    for mut cam in &mut cameras {
+        cam.view_direction = match cam.view_direction {
+            ViewDirection::Normal => ViewDirection::Mirrored,
+            ViewDirection::Mirrored => ViewDirection::Normal,
+        };
+    }
+}
+```
+
+> **Don't set `camera.transform.scale.x` yourself** — the plugin owns its sign. You can still set `scale.x`'s magnitude for zoom; only the sign is overwritten.
+
 ### Sending move events manually
 
 Instead of `CameraFollow`, you can drive the camera yourself by sending `ParallaxMoveEvent`:

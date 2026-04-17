@@ -1,5 +1,7 @@
 use bevy::prelude::*;
-use bevy_parallaxium::{CameraFollow, LayerRepeat, ParallaxCamera, ParallaxLayer, ParallaxPlugin, ParallaxSystems, RepeatStrategy};
+use bevy_parallaxium::{
+    CameraFollow, LayerRepeat, ParallaxCamera, ParallaxLayer, ParallaxPlugin, ParallaxSystems, RepeatStrategy, ViewDirection,
+};
 
 const ATLAS_COLUMNS: usize = 6;
 const ATLAS_ROWS: usize = 7;
@@ -34,7 +36,7 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (player_input_system, player_animation_system, sun_movement_system)
+            (player_input_system, player_animation_system, sun_movement_system, mirror_toggle_system)
                 .chain()
                 .before(ParallaxSystems),
         )
@@ -196,6 +198,19 @@ fn player_animation_system(time: Res<Time>, mut query: Query<(&mut Sprite, &mut 
     }
 
     sprite.flip_x = !anim.facing_right;
+}
+
+/// Press M to mirror the view horizontally (simulates looking at the scene from behind).
+fn mirror_toggle_system(keyboard_input: Res<ButtonInput<KeyCode>>, mut query: Query<&mut ParallaxCamera>) {
+    if !keyboard_input.just_pressed(KeyCode::KeyM) {
+        return;
+    }
+    for mut parallax in query.iter_mut() {
+        parallax.view_direction = match parallax.view_direction {
+            ViewDirection::Normal => ViewDirection::Mirrored,
+            ViewDirection::Mirrored => ViewDirection::Normal,
+        };
+    }
 }
 
 /// Moves the sun downward over 60 seconds.

@@ -46,11 +46,33 @@ impl ParallaxMoveEvent {
     }
 }
 
+/// Controls which way the camera faces. `Mirrored` flips the view horizontally,
+/// as if looking at the scene from behind (along the opposite Z direction).
+/// The plugin applies this by driving the sign of the camera's `Transform.scale.x`;
+/// never set `scale.x` manually when using `ViewDirection`.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewDirection {
+    #[default]
+    Normal,
+    Mirrored,
+}
+
+impl ViewDirection {
+    /// The x-axis scale sign corresponding to this direction.
+    pub fn scale_x(&self) -> f32 {
+        match self {
+            Self::Normal => 1.0,
+            Self::Mirrored => -1.0,
+        }
+    }
+}
+
 /// Attach to a camera to enable parallax scrolling on its child `ParallaxLayer` entities.
 #[derive(Component)]
 pub struct ParallaxCamera {
     pub render_layer: u8,
     pub limits: Vec2Limit,
+    pub view_direction: ViewDirection,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -122,6 +144,11 @@ impl ParallaxCamera {
     pub fn new(render_layer: u8) -> Self {
         Self { render_layer, ..default() }
     }
+
+    pub fn with_view_direction(mut self, direction: ViewDirection) -> Self {
+        self.view_direction = direction;
+        self
+    }
 }
 
 impl Default for ParallaxCamera {
@@ -129,6 +156,7 @@ impl Default for ParallaxCamera {
         Self {
             render_layer: 0,
             limits: default(),
+            view_direction: ViewDirection::default(),
         }
     }
 }
@@ -137,7 +165,14 @@ impl Default for ParallaxCamera {
 mod tests {
     use bevy::{ecs::entity::EntityRow, prelude::*};
 
-    use crate::ParallaxMoveEvent;
+    use crate::{ParallaxMoveEvent, ViewDirection};
+
+    #[test]
+    fn view_direction_scale_x() {
+        assert_eq!(ViewDirection::Normal.scale_x(), 1.0);
+        assert_eq!(ViewDirection::Mirrored.scale_x(), -1.0);
+        assert_eq!(ViewDirection::default(), ViewDirection::Normal);
+    }
 
     #[test]
     fn test_parallax_event() {
