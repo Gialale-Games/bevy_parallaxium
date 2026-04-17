@@ -19,12 +19,17 @@ pub struct ParallaxPlugin;
 impl Plugin for ParallaxPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<ParallaxMoveEvent>()
-            .add_systems(PreUpdate, initialize_layers_system);
+            .add_systems(PreUpdate, (sync_view_direction_system, initialize_layers_system).chain());
         #[cfg(feature = "animation")]
         app.add_systems(Update, sprite_frame_update_system);
         app.add_systems(
             Update,
-            (camera_follow_system, move_layers_system, update_layer_textures_system)
+            (
+                sync_view_direction_system,
+                camera_follow_system,
+                move_layers_system,
+                update_layer_textures_system,
+            )
                 .chain()
                 .in_set(ParallaxSystems),
         );
@@ -33,6 +38,18 @@ impl Plugin for ParallaxPlugin {
 
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct ParallaxSystems;
+
+/// Mirror the camera's `Transform.scale.x` sign to match `ParallaxCamera::view_direction`.
+/// Preserves scale magnitude so users can still scale their camera for zoom.
+fn sync_view_direction_system(mut query: Query<(&ParallaxCamera, &mut Transform), Changed<ParallaxCamera>>) {
+    for (parallax, mut transform) in query.iter_mut() {
+        let mag = transform.scale.x.abs().max(f32::MIN_POSITIVE);
+        let desired = mag.copysign(parallax.view_direction.scale_x());
+        if transform.scale.x != desired {
+            transform.scale.x = desired;
+        }
+    }
+}
 
 /// Initialize newly added `ParallaxLayer` components by spawning their texture grids.
 /// Layers must be children of a camera entity with `ParallaxCamera`.
@@ -50,6 +67,7 @@ fn initialize_layers_system(
         let camera_entity = child_of.parent();
         let (parallax_camera, camera, camera_transform) = camera_query.get(camera_entity)?;
         let cam_pos = camera_transform.translation.truncate();
+        let cam_scale = camera_transform.scale.truncate();
         if let Some(viewport) = &camera.viewport {
             window_size = viewport.physical_size.as_vec2();
         }
@@ -97,8 +115,8 @@ fn initialize_layers_system(
             .insert((
                 Transform {
                     translation: Vec3::new(
-                        layer.position.x - cam_pos.x * (1.0 - layer.speed.x),
-                        layer.position.y - cam_pos.y * (1.0 - layer.speed.y),
+                        (layer.position.x - cam_pos.x * (1.0 - layer.speed.x)) / cam_scale.x,
+                        (layer.position.y - cam_pos.y * (1.0 - layer.speed.y)) / cam_scale.y,
                         layer.z,
                     ),
                     scale: layer.scale.extend(1.0),
@@ -149,6 +167,7 @@ fn move_layers_system(
     for event in move_events.read() {
         if let Ok((mut camera_transform, parallax, children)) = camera_query.get_mut(event.camera) {
             let camera_translation = camera_transform.translation;
+            let cam_scale = camera_transform.scale.truncate();
             camera_transform.translation = parallax
                 .inside_limits(camera_transform.translation.truncate() + event.translation)
                 .extend(camera_transform.translation.z);
@@ -157,9 +176,11 @@ fn move_layers_system(
 
             for child in children.iter() {
                 if let Ok((mut layer_transform, layer)) = layer_query.get_mut(child) {
-                    // Counteract inherited camera movement proportional to (1 - speed)
-                    layer_transform.translation.x -= real_translation.x * (1.0 - layer.speed.x);
-                    layer_transform.translation.y -= real_translation.y * (1.0 - layer.speed.y);
+                    // Counteract inherited camera movement proportional to (1 - speed).
+                    // Dividing by the camera's scale keeps world-space parallax correct
+                    // even when the camera is mirrored (e.g. scale.x = -1).
+                    layer_transform.translation.x -= real_translation.x * (1.0 - layer.speed.x) / cam_scale.x;
+                    layer_transform.translation.y -= real_translation.y * (1.0 - layer.speed.y) / cam_scale.y;
                 }
             }
         }
@@ -260,6 +281,45 @@ fn update_layer_textures_system(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    /// Models what `move_layers_system` does: the layer's local-space delta.
+    fn local_delta(real_translation: f32, speed: f32, cam_scale: f32) -> f32 {
+        -real_translation * (1.0 - speed) / cam_scale
+    }
+
+    /// World-space change for a child of a camera with the given scale, given the
+    /// camera moved by `real_translation` and the layer's local translation changed
+    /// by `local_delta`. `world = cam + cam_scale * local`.
+    fn layer_world_delta(real_translation: f32, speed: f32, cam_scale: f32) -> f32 {
+        real_translation + cam_scale * local_delta(real_translation, speed, cam_scale)
+    }
+
+    /// Parallax invariant: when the camera moves by `delta`, a layer with the given
+    /// speed should move `delta * speed` in world space, regardless of camera scale sign.
+    #[test]
+    fn parallax_world_delta_matches_speed_under_any_scale() {
+        for cam_scale in [1.0, -1.0, 2.0, -0.5] {
+            for speed in [0.0, 0.25, 0.5, 0.95, 1.0] {
+                let delta = 10.0;
+                let world = layer_world_delta(delta, speed, cam_scale);
+                let expected = delta * speed;
+                assert!(
+                    (world - expected).abs() < 1e-5,
+                    "scale={cam_scale}, speed={speed}: expected {expected}, got {world}"
+                );
+            }
+        }
+    }
+
+    /// Mirrored view with a static (speed=0) background should stay put in world space.
+    #[test]
+    fn mirrored_static_background_stays_put() {
+        let world = layer_world_delta(10.0, 0.0, -1.0);
+        assert!(world.abs() < 1e-5, "expected 0.0, got {world}");
+    }
 }
 
 #[cfg(doctest)]
