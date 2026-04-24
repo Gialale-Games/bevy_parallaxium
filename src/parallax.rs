@@ -14,15 +14,27 @@ pub struct ParallaxMoveEvent {
 
 impl ParallaxMoveEvent {
     pub fn new(camera: Entity, translation: Vec2, rotation: f32) -> Self {
-        Self { camera, translation, rotation }
+        Self {
+            camera,
+            translation,
+            rotation,
+        }
     }
 
     pub fn translate(camera: Entity, translation: Vec2) -> Self {
-        Self { camera, translation, rotation: 0.0 }
+        Self {
+            camera,
+            translation,
+            rotation: 0.0,
+        }
     }
 
     pub fn rotate(camera: Entity, rotation: f32) -> Self {
-        Self { camera, translation: Vec2::ZERO, rotation }
+        Self {
+            camera,
+            translation: Vec2::ZERO,
+            rotation,
+        }
     }
 
     pub fn has_translation(&self) -> bool {
@@ -163,7 +175,7 @@ impl Default for ParallaxCamera {
 
 #[cfg(test)]
 mod tests {
-    use bevy::{ecs::entity::EntityRow, prelude::*};
+    use bevy::{ecs::entity::EntityIndex, prelude::*};
 
     use crate::{ParallaxMoveEvent, ViewDirection};
 
@@ -176,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_parallax_event() {
-        let camera = Entity::from_row(EntityRow::from_raw_u32(0).unwrap());
+        let camera = Entity::from_index(EntityIndex::from_raw_u32(0).unwrap());
 
         let no_movement = ParallaxMoveEvent {
             translation: Vec2::ZERO,
