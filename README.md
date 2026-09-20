@@ -5,7 +5,7 @@ parallax backgrounds for your games.
 
 ![bandit](/assets/bandit.gif)
 
-> **Fork of [bevy-parallax](https://github.com/Corrosive-Games/bevy-parallax)** — rewritten for Bevy 0.17 with a new
+> **Fork of [bevy-parallax](https://github.com/Corrosive-Games/bevy-parallax)** — rewritten for Bevy 0.19 with a new
 > component-based API
 
 ## Usage
@@ -95,7 +95,7 @@ fn move_camera(
 
 `LayerRepeat` controls how tiles fill the screen:
 
-```rust,no_run
+```rust,ignore
 LayerRepeat::none()                                        // single sprite, no tiling
 LayerRepeat::horizontal()                                  // tile X axis, no mirroring
 LayerRepeat::vertical()                                    // tile Y axis, no mirroring
@@ -107,7 +107,7 @@ LayerRepeat::both(RepeatStrategy::MirrorBoth)             // tile both axes, fli
 
 ### Animation
 
-```rust,no_run
+```rust,ignore
 ParallaxLayer::new("spritesheet.png", 0.5)
     .with_tile_size(UVec2::new(32, 32))
     .with_cols(8)
@@ -124,7 +124,7 @@ ParallaxLayer::new("spritesheet.png", 0.5)
 
 Add `CameraFollow` to a `ParallaxCamera` entity to track another entity:
 
-```rust,no_run
+```rust,ignore
 use bevy_parallaxium::{CameraFollow, PID};
 
 // Snap directly to target
@@ -144,7 +144,7 @@ CameraFollow::new(player_entity).with_offset(Vec2::new(0., 40.))
 
 Clamp camera movement to world bounds using `Vec2Limit`:
 
-```rust,no_run
+```rust,ignore
 use bevy_parallaxium::{Limit, ParallaxCamera, Vec2Limit};
 
 ParallaxCamera {
@@ -160,7 +160,7 @@ ParallaxCamera {
 
 Flip the camera horizontally — as if viewing the scene from behind — with `ViewDirection`. Parallax, tiling, and `CameraFollow` all continue to work unchanged.
 
-```rust,no_run
+```rust,ignore
 use bevy_parallaxium::{ParallaxCamera, ViewDirection};
 
 // At spawn time:
@@ -169,7 +169,7 @@ ParallaxCamera::default().with_view_direction(ViewDirection::Mirrored)
 
 Toggle at runtime by mutating the component — the plugin syncs `Transform.scale.x` for you:
 
-```rust,no_run
+```rust,ignore
 fn toggle_mirror(mut cameras: Query<&mut ParallaxCamera>) {
     for mut cam in &mut cameras {
         cam.view_direction = match cam.view_direction {
@@ -186,7 +186,7 @@ fn toggle_mirror(mut cameras: Query<&mut ParallaxCamera>) {
 
 Instead of `CameraFollow`, you can drive the camera yourself by sending `ParallaxMoveEvent`:
 
-```rust,no_run
+```rust,ignore
 move_events.write(ParallaxMoveEvent::translate(camera, Vec2::new(3.0, 0.0)));
 move_events.write(ParallaxMoveEvent::rotate(camera, 0.01));
 move_events.write(ParallaxMoveEvent::new(camera, Vec2::new(3.0, 0.0), 0.01));
@@ -202,14 +202,16 @@ To disable the built-in animation system:
 
 ```toml
 [dependencies]
-bevy_parallaxium = { version = "0.1", default-features = false }
+bevy_parallaxium = { version = "0.4", default-features = false }
 ```
 
 ## Compatible Bevy versions
 
 | Bevy version | `bevy_parallaxium` version |
 |:-------------|:--------------------------|
-| `0.17`       | `0.1`                     |
+| `0.19`       | `0.4`                     |
+| `0.18`       | `0.3`                     |
+| `0.17`       | `0.1` – `0.2`             |
 
 ## Credits
 
