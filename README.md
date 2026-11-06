@@ -5,7 +5,7 @@ parallax backgrounds for your games.
 
 ![bandit](/assets/bandit.gif)
 
-> **Fork of [bevy-parallax](https://github.com/Corrosive-Games/bevy-parallax)** — rewritten for Bevy 0.19 with a new
+> **Fork of [bevy-parallax](https://github.com/Corrosive-Games/bevy-parallax)** — rewritten for Bevy 0.20 with a new
 > component-based API
 
 ## Usage
@@ -202,13 +202,14 @@ To disable the built-in animation system:
 
 ```toml
 [dependencies]
-bevy_parallaxium = { version = "0.4", default-features = false }
+bevy_parallaxium = { version = "0.5", default-features = false }
 ```
 
 ## Compatible Bevy versions
 
 | Bevy version | `bevy_parallaxium` version |
 |:-------------|:--------------------------|
+| `0.20`       | `0.5`                     |
 | `0.19`       | `0.4`                     |
 | `0.18`       | `0.3`                     |
 | `0.17`       | `0.1` – `0.2`             |
